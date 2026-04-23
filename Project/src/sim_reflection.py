@@ -181,29 +181,33 @@ def figure_2b(N_cav=N_FOCK_DEFAULT, n_points=80, n_sd=25):
     W_VH_analytical = analytical_VH(delta_c, delta_0a, qd_state='g')
     W_VH_bare_analytical = analytical_VH(delta_c, delta_0a, qd_state='-')
     
+    from common_params import detuning_ghz_to_wavelength
+    wavelengths = detuning_ghz_to_wavelength(delta_c)
+    
     t_elapsed = time.time() - t_start
     print(f"\nTotal computation time: {t_elapsed:.1f} s")
     
     # ── Normalize for comparison ──
-    # Scale ME and analytical to same peak height
-    scale_me = 1.0 / max(W_VH_bare_me.max(), 1e-10)
-    scale_an = 1.0 / max(W_VH_bare_analytical.max(), 1e-10)
+    # Scale ME and analytical to peak ~80k to match experiment
+    scale_me = 80.0 / max(W_VH_bare_me.max(), 1e-10)
+    scale_an = 80.0 / max(W_VH_bare_analytical.max(), 1e-10)
     
     # ── Plot ──
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     
     # Panel 1: Cross-pol intensity (V→H) — main comparison
     ax = axes[0]
-    ax.plot(delta_c, W_VH_me * scale_me, 'b-', lw=2, label='ME simulation')
-    ax.plot(delta_c, W_VH_analytical * scale_an, 'r--', lw=1.5, 
+    ax.plot(wavelengths, W_VH_me * scale_me, 'b-', lw=2, label='ME simulation')
+    ax.plot(wavelengths, W_VH_analytical * scale_an, 'r--', lw=1.5, 
             label='Analytical (Eq. 41)')
-    ax.plot(delta_c, W_VH_bare_me * scale_me, 'k:', lw=1, alpha=0.5,
+    ax.plot(wavelengths, W_VH_bare_me * scale_me, 'k:', lw=1, alpha=0.5,
             label='Bare cavity (ME)')
-    ax.set_xlabel('Δ_c / 2π (GHz)', fontsize=12)
-    ax.set_ylabel('W_VH (normalized)', fontsize=12)
+    ax.set_xlabel('Wavelength (nm)', fontsize=12)
+    ax.set_ylabel(r'Intensity (10$^3$ × count/sec)', fontsize=12)
     ax.set_title('Fig 2b: V→H Cross-Polarization', fontsize=13)
     ax.legend(fontsize=9)
-    ax.set_xlim(-40, 40)
+    ax.set_xlim(920.75, 921.1)
+    ax.set_ylim(0, 90)
     
     # Panel 2: Reflection coefficient r(ω)
     ax = axes[1]
@@ -220,15 +224,15 @@ def figure_2b(N_cav=N_FOCK_DEFAULT, n_points=80, n_sd=25):
                           for dc in delta_c])
         r_avg_an += w * r_tmp * d_sd
     
-    ax.plot(delta_c, np.abs(r_avg_me)**2, 'b-', lw=2, label='|r|² (ME)')
-    ax.plot(delta_c, np.abs(r_avg_an)**2, 'r--', lw=1.5, label='|r|² (Analytical)')
-    ax.plot(delta_c, np.abs(r_bare_me)**2, 'k:', lw=1, alpha=0.5, 
+    ax.plot(wavelengths, np.abs(r_avg_me)**2, 'b-', lw=2, label='|r|² (ME)')
+    ax.plot(wavelengths, np.abs(r_avg_an)**2, 'r--', lw=1.5, label='|r|² (Analytical)')
+    ax.plot(wavelengths, np.abs(r_bare_me)**2, 'k:', lw=1, alpha=0.5, 
             label='|r|² (bare)')
-    ax.set_xlabel('Δ_c / 2π (GHz)', fontsize=12)
+    ax.set_xlabel('Wavelength (nm)', fontsize=12)
     ax.set_ylabel('|r(ω)|²', fontsize=12)
     ax.set_title('Reflection Coefficient', fontsize=13)
     ax.legend(fontsize=9)
-    ax.set_xlim(-40, 40)
+    ax.set_xlim(920.75, 921.1)
     
     plt.tight_layout()
     fig_path = os.path.join(SIM_FIG_DIR, 'Figure2b-ME.png')
@@ -294,8 +298,13 @@ def figure_2def(N_cav=N_FOCK_DEFAULT, n_points=60, n_sd=20):
     # ── Plot ──
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
     
-    # Normalize to peak
+    from common_params import detuning_ghz_to_wavelength
+    wavelengths = detuning_ghz_to_wavelength(delta_c)
+    
+    # Scale to ~100k for the combined peak
+    # The analytic code scales `spec / np.max(spec) * 100` -> ~100k
     norm = max(W_VH_bare.max(), 1e-10)
+    scale = 100.0 / norm
     
     for i, (pump_det, p_m, label) in enumerate(
             zip(pump_detunings, p_minus_values, panel_labels)):
@@ -303,16 +312,18 @@ def figure_2def(N_cav=N_FOCK_DEFAULT, n_points=60, n_sd=20):
         
         # Mixed spectrum: p × bare + (1-p) × coupled
         W_mixed = p_m * W_VH_bare + (1.0 - p_m) * W_VH_coupled
+        W_scaled = W_mixed * scale
         
-        ax.plot(delta_c, W_mixed / norm, 'b-', lw=2)
-        ax.fill_between(delta_c, 0, W_mixed / norm, alpha=0.15, color='blue')
-        ax.set_xlabel('Δ_c / 2π (GHz)', fontsize=11)
-        ax.set_ylabel('Intensity (norm.)', fontsize=11)
+        ax.plot(wavelengths, W_scaled, 'b-', lw=2)
+        ax.fill_between(wavelengths, 0, W_scaled, alpha=0.15, color='blue')
+        ax.set_xlabel('Wavelength (nm)', fontsize=11)
+        if i == 1:
+            ax.set_ylabel(r'Intensity (10$^3$ × count/sec)', fontsize=11)
         ax.set_title(f'({label}) Δ_L/2π = {pump_det:+.0f} GHz, p_− = {p_m:.2f}',
                       fontsize=11)
-        ax.set_xlim(-40, 40)
-        ax.set_ylim(0, 1.1)
-    
+        ax.set_xlim(920.75, 921.05)
+        ax.set_ylim(0, 110)
+        
     plt.suptitle('Figure 2d-f: CW Pump Spectroscopy (ME Simulation)',
                  fontsize=13, y=1.02)
     plt.tight_layout()
